@@ -1,40 +1,67 @@
-Libav
+Libav with CUDA accelerated VP8 encoder
 =====
 
-[![Build Status](https://travis-ci.org/libav/libav.svg)](https://travis-ci.org/libav/libav)
+### Developed by Italtel and Universita' degli Studi di Milano, 2015-6
+Alessandro Petrini, Pietro Paglierani, Giuliano Grossi, Federico Pedersini
 
 Libav is a collection of libraries and tools to process multimedia content
 such as audio, video, subtitles and related metadata.
 
-## Libraries
+This version enables the NVidia CUDA accelerated encoder provided by the fork of the official libvpx at https://github.com/Topopiccione/libvpx . All the other libraries were not modified.
 
-* `libavcodec` provides implementation of a wider range of codecs.
-* `libavformat` implements streaming protocols, container formats and basic I/O access.
-* `libavutil` includes hashers, decompressors and miscellaneous utility functions.
-* `libavfilter` provides a mean to alter decoded Audio and Video through chain of filters.
-* `libavdevice` provides an abstraction to access capture and playback devices.
-* `libavresample` implements audio mixing and resampling routines.
-* `libswscale` implements color conversion and scaling routines.
 
-## Tools
+## Build Instructions
+Directory t_build has been already per-configured for building on x86_64 Linux, so that the
+```
+make
+```
+command would ideally be enough for compiling and linking.
 
-* [avconv](http://libav.org/avconv.html) is a command line toolbox to
-  manipulate, convert and stream multimedia content.
-* [avplay](http://libav.org/avplay.html) is a minimalistic multimedia player.
-* [avprobe](http://libav.org/avprobe.html) is a simple analisys tool to inspect
-  multimedia content.
-* Additional small tools such as `aviocat`, `ismindex` and `qt-faststart`.
+This program requires NVidia CUDA SDK 8.0 for compiling, so that NVidia nvcc must be present in the system under the directory:
+/usr/local/cuda-8.0/bin/
+otherwise the files
+```
+t_build/config.mak
+```
+must be modified accordingly accordingly.
+
+It is possible to create a working makefile from scratch using the standard configure by following the instruction on BUILD_INSTR.txt
+
+
+## Compiled binary
+
+As now, we are not providing a compiled binary package.
+
+
+## Usage
+the command line options
+```
+-cuda_me_enabled 1
+-cuda_me_enabled 2
+-cuda_me_enabled 3
+```
+enables the GPU acceleration for VP8 encoding only; mode 1 is the fastest and less accurate, while 2 is an intermediate level, and 3 is the most accurate.
+
 
 ## Documentation
 
-The offline documentation is available in the **doc/** directory.
+Online documentation for the accelerated VP8 encoder developed by Italtel and Universita' degl studi di Milano is available at https://github.com/Topopiccione/libvpx
 
-The online documentation is available in the main [website](http://libav.org)
-and in the [wiki](http://wiki.libav.org).
 
-### Examples
+## Contacts
 
-Conding examples are available in the **doc/example** directory.
+Alessandro Petrini (UNIMI) - email: alessandro.petrini@unimi.it
+
+Pietro Paglierani (ITALTEL) - email: pietro.paglierani@italtel.com
+
+Giuliano Grossi (UNIMI) - email: grossi@di.unimi.it
+
+Federico Pedersini (UNIMI) - email: pedersini@di.unimi.it
+
+
+# DISCLAIMER
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ## License
 

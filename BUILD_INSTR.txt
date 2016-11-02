@@ -1,0 +1,93 @@
+Libav support for CUDA accelerated VP8 encoder based on libvpx
+Developed by Italtel and Universita' degli Studi di Milano, 2015-6
+Alessandro Petrini, Pietro Paglierani, Giuliano Grossi, Federico Pedersini
+
+
+---------------------
+  BUILD INSTRUCTION
+---------------------
+
+Directory t_build has been already per-configured for build on x86_64 Linux, so that the
+	make
+command would ideally be enough for compiling and linking
+
+This version has been generated with this set of options:
+--enable-nvenc --enable-libvpx --enable-libx264 --enable-libx265 --enable-gpl --enable-nonfree
+
+Note that NVidia nvcc must be present in the system under the directory:
+/usr/local/cuda-8.0/bin/
+otherwise, modify the t_build/config.mak
+accordingly.
+
+It is possible to create a working makefile from scratch using the standard configure; below are listed the required mods to the generated makefile, provided that a directory "t_build" has been made.
+
+It is assumed that the CUDA accelerated VP8 encoder has been correctly compiled and installed to the target system.
+
+
+------------------
+mod to libavcodec/libvpxenc.c (already included in the git repository):
+------------------
+
+    int cuda_me_enabled;
+..
+    av_log(avctx, level, "GPU acceleration (UNIMI)\n"
+          "  %*s%u\n",
+          width, "cuda_me_enabled:", cfg->cuda_me_enabled);
+..
+    enccfg.cuda_me_enabled = ctx->cuda_me_enabled;
+..
+    { "cuda_me_enabled", "Cuda-accelerated motion estimation (UNIMI)", OFFSET(cuda_me_enabled), AV_OPT_TYPE_INT, {.i64 = 0 }, 0, 1, VE},
+
+
+
+------------------
+Launch the command from within the t_build directory:
+------------------
+
+../configure --enable-libvpx--enable-gpl <all the other options>
+
+
+
+------------------
+mods to t_build/config.mak:
+------------------
+
+--- LD=gcc
++++ LD=/usr/local/cuda-8.0/bin/nvcc
+
+--- LDFLAGS=  -Wl,--as-needed -Wl,--warn-common -Wl,-rpath-link=libswscale:libavfilter:libavdevice:libavformat:libavcodec:libavutil:libavresample
++++ LDFLAGS=  -link -gencode arch=compute_52,code=compute_52 -gencode arch=compute_52,code=sm_52
+
+--- EXTRALIBS=-ldl -lX11 -L/usr/local/lib -lx265 -L/usr/local/lib -lx264 -lpthread -lm -ldl -lm -lbz2 -lz -pthread
++++ EXTRALIBS=-ldl -lX11 -L/usr/local/lib -lx265 -L/usr/local/lib -lx264 -lpthread -lm -ldl -L/usr/local/lib -lvpx -lbz2 -lz -Xcompiler -pthread 
+
+--- CONFIG_LIBVPX_VP8_ENCODER=no
++++ CONFIG_LIBVPX_VP8_ENCODER=yes
+
+
+
+------------------
+Launch the command:
+------------------
+make
+
+
+
+--------------------------------
+--------------------------------
+occasionally, ../configure may stop with "libvpx not found" error.
+In this case, modify the condition:
+
+require_pkg_config "vpx >= 1.3.0" vpx/vpx_codec.h vpx_codec_version
+
+from the line beginning with:
+
+enabled libvpx && [...]
+
+
+
+------------------
+    DISCLAIMER
+------------------
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
