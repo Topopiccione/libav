@@ -69,6 +69,7 @@ typedef struct VP8EncoderContext {
     int static_thresh;
     int drop_threshold;
     int noise_sensitivity;
+    int cuda_me_enabled;
 } VP8Context;
 
 /** String mappings for enum vp8e_enc_control_id */
@@ -147,6 +148,9 @@ static av_cold void dump_enc_cfg(AVCodecContext *avctx,
            width, "kf_mode:",     cfg->kf_mode,
            width, "kf_min_dist:", cfg->kf_min_dist,
            width, "kf_max_dist:", cfg->kf_max_dist);
+    av_log(avctx, level, "GPU acceleration (UNIMI)\n"
+           "  %*s%u\n",
+           width, "cuda_me_enabled:", cfg->cuda_me_enabled);
     av_log(avctx, level, "\n");
 }
 
@@ -330,6 +334,8 @@ FF_ENABLE_DEPRECATION_WARNINGS
         avctx->profile = enccfg.g_profile = FF_PROFILE_VP9_1;
 
     enccfg.g_error_resilient = ctx->error_resilient;
+
+    enccfg.cuda_me_enabled = ctx->cuda_me_enabled;
 
     dump_enc_cfg(avctx, &enccfg);
     /* Construct Encoder Context */
@@ -621,6 +627,7 @@ static const AVOption options[] = {
     { "static-thresh",    "A change threshold on blocks below which they will be skipped by the encoder", OFFSET(static_thresh), AV_OPT_TYPE_INT, { .i64 = 0 }, 0, INT_MAX, VE },
     { "drop-threshold",   "Frame drop threshold", offsetof(VP8Context, drop_threshold), AV_OPT_TYPE_INT, {.i64 = 0 }, INT_MIN, INT_MAX, VE },
     { "noise-sensitivity", "Noise sensitivity", OFFSET(noise_sensitivity), AV_OPT_TYPE_INT, {.i64 = 0 }, 0, 4, VE},
+    { "cuda_me_enabled", "Cuda-accelerated motion estimation (UNIMI)", OFFSET(cuda_me_enabled), AV_OPT_TYPE_INT, {.i64 = 0 }, 0, INT_MAX, VE},
     { NULL }
 };
 
