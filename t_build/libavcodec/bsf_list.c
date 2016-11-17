@@ -1,0 +1,15 @@
+static const AVBitStreamFilter *bitstream_filters[] = {
+    &ff_aac_adtstoasc_bsf,
+    &ff_chomp_bsf,
+    &ff_dump_extradata_bsf,
+    &ff_extract_extradata_bsf,
+    &ff_h264_mp4toannexb_bsf,
+    &ff_hevc_mp4toannexb_bsf,
+    &ff_imx_dump_header_bsf,
+    &ff_mjpeg2jpeg_bsf,
+    &ff_mjpega_dump_header_bsf,
+    &ff_mov2textsub_bsf,
+    &ff_text2movsub_bsf,
+    &ff_noise_bsf,
+    &ff_remove_extradata_bsf,
+    NULL };
