@@ -21,7 +21,7 @@
 #include <stdint.h>
 
 #include "libavutil/attributes.h"
-#include "libavutil/arm/cpu.h"
+#include "libavutil/aarch64/cpu.h"
 #include "libavcodec/vp9.h"
 
 #define declare_fpel(type, sz)                                          \
@@ -67,6 +67,9 @@ static void op##_##filter##sz##_hv_neon(uint8_t *dst, ptrdiff_t dst_stride,     
     decl_filter_funcs(put, hv, sz); \
     decl_filter_funcs(avg, hv, sz)
 
+#define ff_vp9_copy32_neon ff_vp9_copy32_aarch64
+#define ff_vp9_copy64_neon ff_vp9_copy64_aarch64
+
 declare_copy_avg(64);
 declare_copy_avg(32);
 declare_copy_avg(16);
@@ -93,26 +96,36 @@ define_8tap_2d_funcs(16)
 define_8tap_2d_funcs(8)
 define_8tap_2d_funcs(4)
 
-
-static av_cold void vp9dsp_mc_init_arm(VP9DSPContext *dsp)
+static av_cold void vp9dsp_mc_init_aarch64(VP9DSPContext *dsp)
 {
     int cpu_flags = av_get_cpu_flags();
 
-    if (have_neon(cpu_flags)) {
-#define init_fpel(idx1, idx2, sz, type)              \
+#define init_fpel(idx1, idx2, sz, type, suffix) \
     dsp->mc[idx1][FILTER_8TAP_SMOOTH ][idx2][0][0] = \
     dsp->mc[idx1][FILTER_8TAP_REGULAR][idx2][0][0] = \
     dsp->mc[idx1][FILTER_8TAP_SHARP  ][idx2][0][0] = \
-    dsp->mc[idx1][FILTER_BILINEAR    ][idx2][0][0] = ff_vp9_##type##sz##_neon
+    dsp->mc[idx1][FILTER_BILINEAR    ][idx2][0][0] = ff_vp9_##type##sz##suffix
 
-#define init_copy_avg(idx, sz)   \
-    init_fpel(idx, 0, sz, copy); \
-    init_fpel(idx, 1, sz, avg)
+#define init_copy(idx, sz, suffix) \
+    init_fpel(idx, 0, sz, copy, suffix)
 
+#define init_avg(idx, sz, suffix) \
+    init_fpel(idx, 1, sz, avg,  suffix)
+
+#define init_copy_avg(idx, sz) \
+    init_copy(idx, sz, _neon); \
+    init_avg (idx, sz, _neon)
+
+    if (have_armv8(cpu_flags)) {
+        init_copy(0, 64, _aarch64);
+        init_copy(1, 32, _aarch64);
+    }
+
+    if (have_neon(cpu_flags)) {
 #define init_mc_func(idx1, idx2, op, filter, fname, dir, mx, my, sz, pfx) \
     dsp->mc[idx1][filter][idx2][mx][my] = pfx##op##_##fname##sz##_##dir##_neon
 
-#define init_mc_funcs(idx, dir, mx, my, sz, pfx)                                   \
+#define init_mc_funcs(idx, dir, mx, my, sz, pfx) \
     init_mc_func(idx, 0, put, FILTER_8TAP_REGULAR, regular, dir, mx, my, sz, pfx); \
     init_mc_func(idx, 0, put, FILTER_8TAP_SHARP,   sharp,   dir, mx, my, sz, pfx); \
     init_mc_func(idx, 0, put, FILTER_8TAP_SMOOTH,  smooth,  dir, mx, my, sz, pfx); \
@@ -120,13 +133,13 @@ static av_cold void vp9dsp_mc_init_arm(VP9DSPContext *dsp)
     init_mc_func(idx, 1, avg, FILTER_8TAP_SHARP,   sharp,   dir, mx, my, sz, pfx); \
     init_mc_func(idx, 1, avg, FILTER_8TAP_SMOOTH,  smooth,  dir, mx, my, sz, pfx)
 
-#define init_mc_funcs_dirs(idx, sz)            \
+#define init_mc_funcs_dirs(idx, sz) \
     init_mc_funcs(idx, h,  1, 0, sz, ff_vp9_); \
     init_mc_funcs(idx, v,  0, 1, sz, ff_vp9_); \
     init_mc_funcs(idx, hv, 1, 1, sz,)
 
-        init_copy_avg(0, 64);
-        init_copy_avg(1, 32);
+        init_avg(0, 64, _neon);
+        init_avg(1, 32, _neon);
         init_copy_avg(2, 16);
         init_copy_avg(3, 8);
         init_copy_avg(4, 4);
@@ -157,7 +170,7 @@ define_itxfm(idct, idct, 32);
 define_itxfm(iwht, iwht, 4);
 
 
-static av_cold void vp9dsp_itxfm_init_arm(VP9DSPContext *dsp)
+static av_cold void vp9dsp_itxfm_init_aarch64(VP9DSPContext *dsp)
 {
     int cpu_flags = av_get_cpu_flags();
 
@@ -182,37 +195,25 @@ static av_cold void vp9dsp_itxfm_init_arm(VP9DSPContext *dsp)
     }
 }
 
-#define define_loop_filter(dir, wd, size) \
-void ff_vp9_loop_filter_##dir##_##wd##_##size##_neon(uint8_t *dst, ptrdiff_t stride, int E, int I, int H)
+#define define_loop_filter(dir, wd, len) \
+void ff_vp9_loop_filter_##dir##_##wd##_##len##_neon(uint8_t *dst, ptrdiff_t stride, int E, int I, int H)
 
-#define define_loop_filters(wd, size) \
-    define_loop_filter(h, wd, size);  \
-    define_loop_filter(v, wd, size)
+#define define_loop_filters(wd, len) \
+    define_loop_filter(h, wd, len);  \
+    define_loop_filter(v, wd, len)
 
 define_loop_filters(4, 8);
 define_loop_filters(8, 8);
 define_loop_filters(16, 8);
+
 define_loop_filters(16, 16);
 
-#define lf_mix_fn(dir, wd1, wd2, stridea)                                                         \
-static void loop_filter_##dir##_##wd1##wd2##_16_neon(uint8_t *dst,                                \
-                                                     ptrdiff_t stride,                            \
-                                                     int E, int I, int H)                         \
-{                                                                                                 \
-    ff_vp9_loop_filter_##dir##_##wd1##_8_neon(dst, stride, E & 0xff, I & 0xff, H & 0xff);         \
-    ff_vp9_loop_filter_##dir##_##wd2##_8_neon(dst + 8 * stridea, stride, E >> 8, I >> 8, H >> 8); \
-}
+define_loop_filters(44, 16);
+define_loop_filters(48, 16);
+define_loop_filters(84, 16);
+define_loop_filters(88, 16);
 
-#define lf_mix_fns(wd1, wd2)       \
-    lf_mix_fn(h, wd1, wd2, stride) \
-    lf_mix_fn(v, wd1, wd2, sizeof(uint8_t))
-
-lf_mix_fns(4, 4)
-lf_mix_fns(4, 8)
-lf_mix_fns(8, 4)
-lf_mix_fns(8, 8)
-
-static av_cold void vp9dsp_loopfilter_init_arm(VP9DSPContext *dsp)
+static av_cold void vp9dsp_loopfilter_init_aarch64(VP9DSPContext *dsp)
 {
     int cpu_flags = av_get_cpu_flags();
 
@@ -227,20 +228,20 @@ static av_cold void vp9dsp_loopfilter_init_arm(VP9DSPContext *dsp)
         dsp->loop_filter_16[0] = ff_vp9_loop_filter_h_16_16_neon;
         dsp->loop_filter_16[1] = ff_vp9_loop_filter_v_16_16_neon;
 
-        dsp->loop_filter_mix2[0][0][0] = loop_filter_h_44_16_neon;
-        dsp->loop_filter_mix2[0][0][1] = loop_filter_v_44_16_neon;
-        dsp->loop_filter_mix2[0][1][0] = loop_filter_h_48_16_neon;
-        dsp->loop_filter_mix2[0][1][1] = loop_filter_v_48_16_neon;
-        dsp->loop_filter_mix2[1][0][0] = loop_filter_h_84_16_neon;
-        dsp->loop_filter_mix2[1][0][1] = loop_filter_v_84_16_neon;
-        dsp->loop_filter_mix2[1][1][0] = loop_filter_h_88_16_neon;
-        dsp->loop_filter_mix2[1][1][1] = loop_filter_v_88_16_neon;
+        dsp->loop_filter_mix2[0][0][0] = ff_vp9_loop_filter_h_44_16_neon;
+        dsp->loop_filter_mix2[0][0][1] = ff_vp9_loop_filter_v_44_16_neon;
+        dsp->loop_filter_mix2[0][1][0] = ff_vp9_loop_filter_h_48_16_neon;
+        dsp->loop_filter_mix2[0][1][1] = ff_vp9_loop_filter_v_48_16_neon;
+        dsp->loop_filter_mix2[1][0][0] = ff_vp9_loop_filter_h_84_16_neon;
+        dsp->loop_filter_mix2[1][0][1] = ff_vp9_loop_filter_v_84_16_neon;
+        dsp->loop_filter_mix2[1][1][0] = ff_vp9_loop_filter_h_88_16_neon;
+        dsp->loop_filter_mix2[1][1][1] = ff_vp9_loop_filter_v_88_16_neon;
     }
 }
 
-av_cold void ff_vp9dsp_init_arm(VP9DSPContext *dsp)
+av_cold void ff_vp9dsp_init_aarch64(VP9DSPContext *dsp)
 {
-    vp9dsp_mc_init_arm(dsp);
-    vp9dsp_loopfilter_init_arm(dsp);
-    vp9dsp_itxfm_init_arm(dsp);
+    vp9dsp_mc_init_aarch64(dsp);
+    vp9dsp_loopfilter_init_aarch64(dsp);
+    vp9dsp_itxfm_init_aarch64(dsp);
 }

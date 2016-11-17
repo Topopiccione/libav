@@ -63,6 +63,7 @@ Options: [defaults in brackets after descriptions]
 
 Help options:
   --help                   print this message
+  --quiet                  Suppress showing informative output
   --list-decoders          show all available decoders
   --list-encoders          show all available encoders
   --list-hwaccels          show all available hardware accelerators
@@ -78,7 +79,7 @@ Help options:
 Standard options:
   --logfile=FILE           log tests and output to FILE [config.log]
   --disable-logging        do not log configure debug information
-  --prefix=PREFIX          install in PREFIX [$prefix]
+  --prefix=PREFIX          install in PREFIX [$prefix_default]
   --bindir=DIR             install binaries in DIR [PREFIX/bin]
   --datadir=DIR            install data files in DIR [PREFIX/share/avconv]
   --docdir=DIR             install documentation in DIR [PREFIX/share/doc/libav]
@@ -86,7 +87,7 @@ Standard options:
   --shlibdir=DIR           install shared libs in DIR [PREFIX/lib]
   --incdir=DIR             install includes in DIR [PREFIX/include]
   --mandir=DIR             install man page in DIR [PREFIX/share/man]
-  --enable-rpath           use rpath when linking programs [USE WITH CARE]
+  --enable-rpath           use rpath when linking programs (USE WITH CARE)
 
 Licensing options:
   --enable-gpl             allow use of GPL code, the resulting libs
@@ -99,7 +100,7 @@ Configuration options:
   --disable-static         do not build static libraries [no]
   --enable-shared          build shared libraries [no]
   --enable-small           optimize for size instead of speed
-  --enable-runtime-cpudetect detect cpu capabilities at runtime (bigger binary)
+  --enable-runtime-cpudetect detect CPU capabilities at runtime (bigger binary)
   --enable-gray            enable full grayscale support (slower color)
   --disable-swscale-alpha  disable alpha channel support in swscale
   --disable-all            disable building components, libraries and programs
@@ -864,7 +865,7 @@ check_code(){
 
 check_cppflags(){
     log check_cppflags "$@"
-    check_cc "$@" <<EOF && append CPPFLAGS "$@"
+    check_cpp "$@" <<EOF && append CPPFLAGS "$@"
 int x;
 EOF
 }
@@ -883,15 +884,15 @@ check_cflags(){
 }
 
 test_objcflags(){
-    log test_cflags "$@"
-    set -- $($cflags_filter "$@")
+    log test_objcflags "$@"
+    set -- $($objcflags_filter "$@")
     check_objcc "$@" <<EOF
 int x;
 EOF
 }
 
 check_objcflags(){
-    log check_cflags "$@"
+    log check_objcflags "$@"
     test_objcflags "$@" && add_objcflags "$@"
 }
 
@@ -1026,6 +1027,7 @@ check_exec(){
 }
 
 check_exec_crash(){
+    log check_exec_crash "$@"
     code=$(cat)
 
     # exit() is not async signal safe.  _Exit (C99) and _exit (POSIX)
@@ -1096,6 +1098,7 @@ check_compile_assert(){
 }
 
 require(){
+    log require "$@"
     name="$1"
     headers="$2"
     func="$3"
@@ -1104,6 +1107,7 @@ require(){
 }
 
 require_pkg_config(){
+    log require_pkg_config "$@"
     pkg="$1"
     check_pkg_config "$@" || die "ERROR: $pkg not found"
     add_cflags    $(get_safe "${pkg}_cflags")
@@ -1134,7 +1138,7 @@ check_host_cpp(){
 
 check_host_cppflags(){
     log check_host_cppflags "$@"
-    check_host_cc "$@" <<EOF && append host_cppflags "$@"
+    check_host_cpp "$@" <<EOF && append host_cppflags "$@"
 int x;
 EOF
 }
@@ -1167,7 +1171,7 @@ apply(){
 }
 
 cp_if_changed(){
-    cmp -s "$1" "$2" && echo "$2 is unchanged" && return
+    cmp -s "$1" "$2" && { test "$quiet" != "yes" && echo "$2 is unchanged"; } && return
     mkdir -p "$(dirname $2)"
     $cp_f "$1" "$2"
 }
@@ -2010,8 +2014,6 @@ mimic_decoder_select="blockdsp bswapdsp hpeldsp idctdsp"
 mjpeg_decoder_select="blockdsp hpeldsp idctdsp jpegtables"
 mjpeg_encoder_select="aandcttables jpegtables mpegvideoenc"
 mjpegb_decoder_select="mjpeg_decoder"
-mjpeg_vaapi_encoder_deps="VAEncPictureParameterBufferJPEG"
-mjpeg_vaapi_encoder_select="vaapi_encode jpegtables"
 mlp_decoder_select="mlp_parser"
 motionpixels_decoder_select="bswapdsp"
 mp1_decoder_select="mpegaudio"
@@ -2154,6 +2156,8 @@ hevc_dxva2_hwaccel_select="hevc_decoder"
 hevc_qsv_hwaccel_deps="libmfx"
 hevc_vdpau_hwaccel_deps="vdpau VdpPictureInfoHEVC"
 hevc_vdpau_hwaccel_select="hevc_decoder"
+mjpeg_vaapi_encoder_deps="VAEncPictureParameterBufferJPEG"
+mjpeg_vaapi_encoder_select="vaapi_encode jpegtables"
 mpeg1_vdpau_hwaccel_deps="vdpau"
 mpeg1_vdpau_hwaccel_select="mpeg1video_decoder"
 mpeg2_d3d11va_hwaccel_deps="d3d11va"
@@ -2180,10 +2184,12 @@ vc1_dxva2_hwaccel_select="vc1_decoder"
 vc1_mmal_decoder_deps="mmal"
 vc1_mmal_decoder_select="mmal"
 vc1_mmal_hwaccel_deps="mmal"
+vc1_qsv_hwaccel_deps="libmfx"
 vc1_vaapi_hwaccel_deps="vaapi"
 vc1_vaapi_hwaccel_select="vc1_decoder"
 vc1_vdpau_hwaccel_deps="vdpau"
 vc1_vdpau_hwaccel_select="vc1_decoder"
+vp8_qsv_hwaccel_deps="libmfx"
 vp8_vaapi_hwaccel_deps="vaapi VAPictureParameterBufferVP8"
 vp8_vaapi_hwaccel_select="vp8_decoder"
 wmv3_d3d11va_hwaccel_select="vc1_d3d11va_hwaccel"
@@ -2222,6 +2228,10 @@ mpeg2_qsv_decoder_deps="libmfx"
 mpeg2_qsv_decoder_select="qsvdec mpeg2_qsv_hwaccel mpegvideo_parser"
 mpeg2_qsv_encoder_deps="libmfx"
 mpeg2_qsv_encoder_select="qsvenc"
+vc1_qsv_decoder_deps="libmfx"
+vc1_qsv_decoder_select="qsvdec vc1_qsv_hwaccel vc1_parser"
+vp8_qsv_decoder_deps="libmfx"
+vp8_qsv_decoder_select="qsvdec vp8_qsv_hwaccel vp8_parser"
 
 nvenc_h264_encoder_deps="nvenc"
 nvenc_hevc_encoder_deps="nvenc"
@@ -2286,7 +2296,7 @@ libx262_encoder_deps="libx262"
 libx264_encoder_deps="libx264"
 libx265_encoder_deps="libx265"
 libxavs_encoder_deps="libxavs"
-libxvid_encoder_deps="libxvid"
+libxvid_encoder_deps="libxvid mkstemp"
 
 # demuxers / muxers
 ac3_demuxer_select="ac3_parser"
@@ -2740,6 +2750,8 @@ for opt do
         ;;
         --help|-h) show_help
         ;;
+        --quiet|-q) quiet=yes
+        ;;
         *)
             optname="${opt%%=*}"
             optname="${optname#--}"
@@ -2760,6 +2772,17 @@ for e in $env; do
 done
 
 disabled logging && logfile=/dev/null
+
+# Die early if licensing-related configure options are incompatible.
+die_license_disabled() {
+    enabled $1 || { enabled $v && die "$v is $1 and --enable-$1 is not specified."; }
+}
+
+map "die_license_disabled gpl"      $EXTERNAL_LIBRARY_GPL_LIST
+map "die_license_disabled nonfree"  $EXTERNAL_LIBRARY_NONFREE_LIST $HWACCEL_LIBRARY_NONFREE_LIST
+map "die_license_disabled version3" $EXTERNAL_LIBRARY_VERSION3_LIST
+
+enabled version3 && { enabled gpl && enable gplv3 || enable lgplv3; }
 
 # Disable all the library-specific components if the library itself
 # is disabled, see AVCODEC_LIST and following _LIST variables.
@@ -4118,16 +4141,6 @@ EOF
     exit 1
 fi
 
-die_license_disabled() {
-    enabled $1 || { enabled $v && die "$v is $1 and --enable-$1 is not specified."; }
-}
-
-map "die_license_disabled gpl"      $EXTERNAL_LIBRARY_GPL_LIST
-map "die_license_disabled nonfree"  $EXTERNAL_LIBRARY_NONFREE_LIST $HWACCEL_LIBRARY_NONFREE_LIST
-map "die_license_disabled version3" $EXTERNAL_LIBRARY_VERSION3_LIST
-
-enabled version3 && { enabled gpl && enable gplv3 || enable lgplv3; }
-
 disabled optimizations || check_cflags -fomit-frame-pointer
 
 enable_weak_pic() {
@@ -4755,8 +4768,6 @@ if enabled libcdio; then
     die "ERROR: No usable libcdio/cdparanoia found"
 fi
 
-check_lib X11/Xlib.h XOpenDisplay -lX11 && enable xlib
-
 if enabled libxcb; then
     check_pkg_config xcb-shape xcb/shape.h xcb_shape_rectangles || {
         enabled libxcb && die "ERROR: libxcb not found";
@@ -4782,18 +4793,19 @@ enabled vaapi &&
     check_code cc "va/va.h" "vaCreateSurfaces(0, 0, 0, 0, 0, 0, 0, 0)" ||
     disable vaapi
 
-if enabled vaapi ; then
-    enabled xlib &&
-    check_lib "va/va.h va/va_x11.h" vaGetDisplay -lva -lva-x11 &&
-    enable vaapi_x11
-
+enabled vaapi &&
     check_lib "va/va.h va/va_drm.h" vaGetDisplayDRM -lva -lva-drm &&
     enable vaapi_drm
-fi
 
 enabled vdpau &&
     check_cpp_condition vdpau/vdpau.h "defined VDP_DECODER_PROFILE_MPEG4_PART2_ASP" ||
     disable vdpau
+
+enabled_any vaapi vdpau && check_lib X11/Xlib.h XOpenDisplay -lX11 && enable xlib
+
+enabled vaapi && enabled xlib &&
+    check_lib "va/va.h va/va_x11.h" vaGetDisplay -lva -lva-x11 &&
+    enable vaapi_x11
 
 enabled vdpau && enabled xlib &&
     check_lib "vdpau/vdpau.h vdpau/vdpau_x11.h" vdp_device_create_x11 -lvdpau &&
@@ -5092,6 +5104,8 @@ expand_deps(){
 
 map 'expand_deps $v' $LIBRARY_LIST
 
+if test "$quiet" != "yes"; then
+
 echo "install prefix            $prefix"
 echo "source path               $source_path"
 echo "C compiler                $cc"
@@ -5149,11 +5163,9 @@ echo "optimize for size         ${small-no}"
 echo "optimizations             ${optimizations-no}"
 echo "static                    ${static-no}"
 echo "shared                    ${shared-no}"
-echo "new filter support        ${avfilter-no}"
 echo "network support           ${network-no}"
 echo "threading support         ${thread_type-no}"
 echo "safe bitstream reader     ${safe_bitstream_reader-no}"
-echo "SDL support               ${sdl-no}"
 test -n "$random_seed" &&
     echo "random seed               ${random_seed}"
 echo
@@ -5167,6 +5179,10 @@ echo
 
 echo "Libraries:"
 print_enabled '' $LIBRARY_LIST | print_3_columns
+echo
+
+echo "Programs:"
+print_enabled '' $PROGRAM_LIST | print_3_columns
 echo
 
 for type in decoder encoder hwaccel parser demuxer muxer protocol filter bsf indev outdev; do
@@ -5189,7 +5205,9 @@ fi
 
 echo "License: $license"
 
-echo "Creating config.mak and config.h..."
+echo "Creating configuration files ..."
+
+fi # test "$quiet" != "yes"
 
 test -e Makefile || echo "include $source_path/Makefile" > Makefile
 

@@ -144,8 +144,8 @@ static int qsv_decode_init(AVCodecContext *avctx, QSVContext *q)
         return ret;
 
     param.mfx.CodecId      = ret;
-    param.mfx.CodecProfile = avctx->profile;
-    param.mfx.CodecLevel   = avctx->level;
+    param.mfx.CodecProfile = ff_qsv_profile_to_mfx(avctx->codec_id, avctx->profile);
+    param.mfx.CodecLevel   = avctx->level == FF_LEVEL_UNKNOWN ? MFX_LEVEL_UNKNOWN : avctx->level;
 
     param.mfx.FrameInfo.BitDepthLuma   = desc->comp[0].depth;
     param.mfx.FrameInfo.BitDepthChroma = desc->comp[0].depth;
@@ -154,6 +154,21 @@ static int qsv_decode_init(AVCodecContext *avctx, QSVContext *q)
     param.mfx.FrameInfo.Width          = frame_width;
     param.mfx.FrameInfo.Height         = frame_height;
     param.mfx.FrameInfo.ChromaFormat   = MFX_CHROMAFORMAT_YUV420;
+
+    switch (avctx->field_order) {
+    case AV_FIELD_PROGRESSIVE:
+        param.mfx.FrameInfo.PicStruct = MFX_PICSTRUCT_PROGRESSIVE;
+        break;
+    case AV_FIELD_TT:
+        param.mfx.FrameInfo.PicStruct = MFX_PICSTRUCT_FIELD_TFF;
+        break;
+    case AV_FIELD_BB:
+        param.mfx.FrameInfo.PicStruct = MFX_PICSTRUCT_FIELD_BFF;
+        break;
+    default:
+        param.mfx.FrameInfo.PicStruct = MFX_PICSTRUCT_UNKNOWN;
+        break;
+    }
 
     param.IOPattern   = q->iopattern;
     param.AsyncDepth  = q->async_depth;
@@ -313,8 +328,12 @@ static int qsv_decode(AVCodecContext *avctx, QSVContext *q,
     /* make sure we do not enter an infinite loop if the SDK
      * did not consume any data and did not return anything */
     if (!*sync && !bs.DataOffset) {
-        ff_qsv_print_warning(avctx, ret, "A decode call did not consume any data");
         bs.DataOffset = avpkt->size;
+        ++q->zero_consume_run;
+        if (q->zero_consume_run > 1)
+            ff_qsv_print_warning(avctx, ret, "A decode call did not consume any data");
+    } else {
+        q->zero_consume_run = 0;
     }
 
     if (*sync) {
@@ -485,6 +504,7 @@ int ff_qsv_process_data(AVCodecContext *avctx, QSVContext *q,
         avctx->height       = q->parser->height;
         avctx->coded_width  = q->parser->coded_width;
         avctx->coded_height = q->parser->coded_height;
+        avctx->field_order  = q->parser->field_order;
         avctx->level        = q->avctx_internal->level;
         avctx->profile      = q->avctx_internal->profile;
 
